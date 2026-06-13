@@ -1,0 +1,95 @@
+# === IDE ===
+# Eclipse
+.classpath
+.project
+.settings/
+.gitemberSettings/
+.checkstyle
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# NetBeans
+nbproject/private/
+nbactions.xml
+nb-configuration.xml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# === OS ===
+# Mac
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# === Build ===
+# Maven
+target/
+log/
+build/
+dependency-reduced-pom.xml
+
+# Gradle
+.gradle/
+build/
+
+# General
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# === Node / Frontend ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Vagrant ===
+.vagrant/
+*.box
+
+# === Enterprise Architect ===
+*.ldb
+
+# === Misc ===
+*.bak
+*.swp
+*.swo
+*~
+*.log
+*.tmp
+*.temp
+
+# === OS-specific ===
+# Swap files
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Session files
+Session.vim
+
+# === Project specific ===
+# Keep this section for project-specific ignores

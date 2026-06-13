@@ -1,0 +1,236 @@
+package com.az.gitember.service;
+
+import com.az.gitember.data.LangDefinition;
+import com.az.gitember.data.Pair;
+import com.az.gitember.data.ScmRevisionInformation;
+import com.az.gitember.data.Side;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.eclipse.jgit.diff.Edit;
+import org.eclipse.jgit.diff.EditList;
+import org.eclipse.jgit.revwalk.RevCommit;
+
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.lang.reflect.Field;
+import java.math.BigInteger;
+import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+public class GitemberUtil {
+
+
+    private final static SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+
+    public static String formatDate(Date date) {
+        return simpleDateFormat.format(date);
+    }
+
+    public static Date intToDate(int time) {
+        return new Date(1000L * time);
+    }
+
+
+    public static String getLastPart(String input) {
+        if (input == null || !input.contains("/")) {
+            return input;
+        }
+        return input.substring(input.lastIndexOf('/') + 1);
+    }
+
+
+    public static IsClass is(String str) {
+        return new IsClass(str);
+    }
+
+    public static class IsClass {
+        private final String obj;
+        public IsClass(String obj) {
+            this.obj = obj;
+        }
+        public boolean oneOf(String... objes) {
+            return Arrays.stream(objes).filter(s -> s.equals(obj)).findFirst().isPresent();
+        }
+    }
+
+
+
+    public static Pair<ArrayList<String>, ArrayList<Edit.Type>> getLines(final String content, final EditList diffList, final Side side) {
+        ArrayList<String> original = getLines(content);
+        ArrayList<String> lines = new ArrayList<>(original.size());
+        ArrayList<Edit.Type> types = new ArrayList<>(original.size());
+        boolean needToAlign = false;
+        Edit editToAling = null;
+        for (int i = 0; i < original.size(); i++) {
+            Edit edit = getDiffAtLine(diffList, side, i);
+            Edit.Type replaceType = null;
+
+            if (edit != null) {
+                Edit.Type type = edit.getType();
+                Pair<Integer, Integer> posSide = getPosition(side, edit );
+                Pair<Integer, Integer> posSodeOposite = getPosition(side.opposite(), edit );
+                int emtyLineToAdd = posSodeOposite.getSecond() - posSodeOposite.getFirst();
+                if (type == Edit.Type.DELETE) {
+                    addEmptyLines(lines, types, type, emtyLineToAdd);
+                    if  (posSide.getSecond() - posSide.getFirst() > 0 && i < posSide.getSecond()) {
+                        replaceType = type;
+                    }
+                } else if (type == Edit.Type.INSERT) {
+                    addEmptyLines(lines, types, type, emtyLineToAdd);
+                    if  (posSide.getSecond() - posSide.getFirst() > 0 && i < posSide.getSecond()) {
+                        replaceType = type;
+                    }
+
+                 } else if (type == Edit.Type.REPLACE) {
+                    replaceType = type;
+                    needToAlign = true;
+                    editToAling = edit;
+                }
+            } else {
+                if (needToAlign) {
+                    Pair<Integer, Integer> posA = getPosition(Side.A, editToAling );
+                    Pair<Integer, Integer> posB = getPosition(Side.B, editToAling );
+                    int lenA = posA.getSecond() - posA.getFirst();
+                    int lenB = posB.getSecond() - posB.getFirst();
+
+                    if (side == Side.A && lenA < lenB) {
+                        addEmptyLines(lines, types, Edit.Type.EMPTY, lenB - lenA);
+                    } else if (side == Side.B && lenB < lenA) {
+                        addEmptyLines(lines, types, Edit.Type.EMPTY, lenA - lenB);
+                    }
+                    needToAlign = false;
+                    editToAling = null;
+                }
+
+            }
+
+            final String linetoAdd = original.get(i);
+            lines.add(linetoAdd);
+            types.add(replaceType);
+        }
+        return new Pair<>(lines, types);
+    }
+
+    private static void addEmptyLines(ArrayList<String> lines, ArrayList<Edit.Type> types, Edit.Type type, int emtyLineToAdd) {
+        for (int j = 0; j < emtyLineToAdd; j++) {
+            lines.add(null);
+            types.add(type);
+        }
+    }
+
+    private static Edit getDiffAtLine(final EditList diffList, final Side side, final int lineIdx) {
+        for (int i = 0; i < diffList.size(); i++) {
+            Edit edit = diffList.get(i);
+
+            if (side == Side.A) {
+                if (lineIdx >= edit.getBeginA() && lineIdx < edit.getEndA()) {
+                    return edit;
+                }
+                if (lineIdx < edit.getBeginA()) {
+                    return null;
+                }
+            } else if (side == Side.B) {
+                if (lineIdx >= edit.getBeginB() && lineIdx < edit.getEndB()) {
+                    return edit;
+                }
+                if (lineIdx < edit.getBeginB()) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Pair<Integer, Integer> getPosition(Side side, Edit edit) {
+        if (side == Side.A) {
+            return new Pair<>(edit.getBeginA(), edit.getEndA());
+        } else {
+            return new Pair<>(edit.getBeginB(), edit.getEndB());
+        }
+    }
+
+    public static ArrayList<String> getLines(final String content) {
+        return (ArrayList<String>) new BufferedReader(new StringReader(content))
+                .lines()
+                .collect(Collectors.toList());
+    }
+
+
+    public static Object getField(Object obj, String fieldName) throws NoSuchFieldException, IllegalAccessException {
+        Field privateStringField = null;
+        privateStringField = obj.getClass().getDeclaredField(fieldName);
+        privateStringField.setAccessible(true);
+        return privateStringField.get(obj);
+    }
+
+    public static int countWhiteCharFromStart(String str) {
+        int rez  = 0;
+        if (StringUtils.isNotEmpty(str)) {
+            for(int i = 0 ; i < str.length(); i++) {
+                if (!(str.charAt(i) == ' ' || str.charAt(i) == '\t')) {
+                    break;
+                }
+                rez++;
+            }
+        }
+        return rez;
+    }
+
+    public static String getFolderName(String fullPath) {
+        if (fullPath != null) {
+            String tmp =  fullPath.replace(".git", "")
+                    .replace("/", File.separator)
+                    .replace("\\", File.separator);
+            Path tmpPath = Path.of(tmp);
+            return tmpPath.getNameCount() > 0 ? tmpPath.getName(tmpPath.getNameCount() - 1).toString() : "";
+        }
+        return "";
+    }
+
+    /**
+     * Generates a hexadecimal encoded MD5 hash for the input String.
+     * @param input The string to hash.
+     * @return The 32-character hexadecimal MD5 hash.
+     */
+    public static String getMd5Hash(String input) {
+        try {
+            // Get the MD5 MessageDigest instance
+            MessageDigest md = MessageDigest.getInstance("MD5");
+
+            // Digest the input bytes
+            byte[] messageDigest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+
+            // Convert the byte array into a signum representation (BigInteger)
+            BigInteger no = new BigInteger(1, messageDigest);
+
+            // Convert the BigInteger into a hexadecimal string
+            String hashtext = no.toString(16);
+
+            // Pad the hash with leading zeros if needed to ensure 32 characters
+            while (hashtext.length() < 32) {
+                hashtext = "0" + hashtext;
+            }
+
+            return hashtext;
+        } catch (NoSuchAlgorithmException e) {
+            // MD5 is guaranteed to be in the standard Java library, so this should not happen
+            throw new RuntimeException(e);
+        }
+    }
+
+}
